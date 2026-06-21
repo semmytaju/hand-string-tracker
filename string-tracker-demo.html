@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hand String Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        #videoContainer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: none;
+        }
+
+        #inputVideo {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror effect */
+        }
+
+        #outputCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+        }
+
+        #ui {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            min-width: 280px;
+        }
+
+        h1 {
+            color: white;
+            font-size: 24px;
+            margin-bottom: 15px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            font-weight: 600;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn.stop {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        #status {
+            color: white;
+            margin-top: 10px;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .legend {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            color: white;
+            font-size: 13px;
+        }
+
+        .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            display: none;
+            z-index: 200;
+            text-align: center;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .info-text {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 12px;
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="spinner"></div>
+        <div>Loading Hand Tracking...</div>
+    </div>
+
+    <div id="ui">
+        <h1>🖐️ Hand String Tracker</h1>
+        <button class="btn" id="startBtn" onclick="startCamera()">▶ Start Camera</button>
+        <button class="btn stop" id="stopBtn" onclick="stopCamera()" style="display: none;">⏹ Stop Camera</button>
+        <div id="status">Status: Ready</div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="color-dot" style="background: #FF6B6B;"></div>
+                <span>Thumb Connection</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-dot" style="background: #4ECDC4;"></div>
+                <span>Index Finger</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-dot" style="background: #45B7D1;"></div>
+                <span>Middle Finger</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-dot" style="background: #96CEB4;"></div>
+                <span>Ring Finger</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-dot" style="background: #FFEAA7;"></div>
+                <span>Pinky Finger</span>
+            </div>
+        </div>
+        
+        <div class="info-text">
+            Show one hand to see finger strings.<br>
+            Show two hands to connect them with threads!
+        </div>
+    </div>
+
+    <div id="videoContainer">
+        <video id="inputVideo" playsinline></video>
+        <canvas id="outputCanvas"></canvas>
+    </div>
+
+    <script>
+        let hands;
+        let camera;
+        let videoElement;
+        let canvasElement;
+        let canvasCtx;
+        let isRunning = false;
+
+        // Finger colors for connections
+        const fingerColors = {
+            thumb: '#FF6B6B',
+            index: '#4ECDC4',
+            middle: '#45B7D1',
+            ring: '#96CEB4',
+            pinky: '#FFEAA7'
+        };
+
+        // Finger landmark indices
+        const fingerIndices = {
+            thumb: [1, 2, 3, 4],
+            index: [5, 6, 7, 8],
+            middle: [9, 10, 11, 12],
+            ring: [13, 14, 15, 16],
+            pinky: [17, 18, 19, 20]
+        };
+
+        function init() {
+            videoElement = document.getElementById('inputVideo');
+            canvasElement = document.getElementById('outputCanvas');
+            canvasCtx = canvasElement.getContext('2d');
+            
+            // Set canvas size
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+        }
+
+        function resizeCanvas() {
+            canvasElement.width = window.innerWidth;
+            canvasElement.height = window.innerHeight;
+        }
+
+        async function startCamera() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('status').textContent = 'Status: Initializing...';
+            
+            try {
+                // Initialize MediaPipe Hands
+                hands = new Hands({
+                    locateFile: (path) => {
+                        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${path}`;
+                    }
+                });
+                
+                hands.setOptions({
+                    maxNumHands: 2,
+                    modelComplexity: 1,
+                    minDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5
+                });
+                
+                hands.onResults(onResults);
+                
+                // Initialize camera
+                camera = new Camera(videoElement, {
+                    onFrame: async () => {
+                        await hands.send({image: videoElement});
+                    },
+                    width: 1280,
+                    height: 720
+                });
+                
+                await camera.start();
+                
+                // Show video container
+                document.getElementById('videoContainer').style.display = 'block';
+                document.getElementById('startBtn').style.display = 'none';
+                document.getElementById('stopBtn').style.display = 'block';
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('status').textContent = 'Status: Camera Active';
+                
+                isRunning = true;
+                
+            } catch (error) {
+                console.error('Error starting camera:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('status').textContent = 'Status: Error - ' + error.message;
+                alert('Error accessing camera. Please ensure you have granted camera permissions.');
+            }
+        }
+
+        function stopCamera() {
+            if (camera) {
+                camera.stop();
+            }
+            
+            document.getElementById('videoContainer').style.display = 'none';
+            document.getElementById('startBtn').style.display = 'block';
+            document.getElementById('stopBtn').style.display = 'none';
+            document.getElementById('status').textContent = 'Status: Stopped';
+            
+            isRunning = false;
+        }
+
+        function onResults(results) {
+            if (!isRunning) return;
+            
+            // Clear canvas
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const hands = results.multiHandLandmarks;
+                
+                if (hands.length === 1) {
+                    // Single hand - draw strings within the hand
+                    drawSingleHandStrings(hands[0]);
+                } else if (hands.length === 2) {
+                    // Two hands - draw connections between hands
+                    drawTwoHandConnections(hands[0], hands[1]);
+                }
+            }
+        }
+
+        function drawSingleHandStrings(landmarks) {
+            // Draw strings for each finger
+            Object.keys(fingerIndices).forEach(finger => {
+                const indices = fingerIndices[finger];
+                const color = fingerColors[finger];
+                
+                // Draw string connecting finger joints
+                for (let i = 0; i < indices.length - 1; i++) {
+                    const startPoint = landmarks[indices[i]];
+                    const endPoint = landmarks[indices[i + 1]];
+                    
+                    // Flip x coordinate to match mirrored video
+                    const flippedStart = { x: 1 - startPoint.x, y: startPoint.y };
+                    const flippedEnd = { x: 1 - endPoint.x, y: endPoint.y };
+                    
+                    drawString(flippedStart, flippedEnd, color, 3);
+                }
+                
+                // Draw landmarks
+                indices.forEach(index => {
+                    const point = landmarks[index];
+                    const flippedPoint = { x: 1 - point.x, y: point.y };
+                    drawLandmark(flippedPoint, color);
+                });
+            });
+        }
+
+        function drawTwoHandConnections(hand1, hand2) {
+            // Connect corresponding fingers between two hands
+            Object.keys(fingerIndices).forEach(finger => {
+                const indices = fingerIndices[finger];
+                const color = fingerColors[finger];
+                
+                // Connect tip of each finger between hands
+                const hand1Tip = hand1[indices[indices.length - 1]];
+                const hand2Tip = hand2[indices[indices.length - 1]];
+                
+                // Flip coordinates to match mirrored video
+                const flippedHand1Tip = { x: 1 - hand1Tip.x, y: hand1Tip.y };
+                const flippedHand2Tip = { x: 1 - hand2Tip.x, y: hand2Tip.y };
+                
+                // Draw connection string between hands
+                drawConnection(flippedHand1Tip, flippedHand2Tip, color, 4);
+                
+                // Also draw internal strings for each hand
+                [hand1, hand2].forEach(hand => {
+                    for (let i = 0; i < indices.length - 1; i++) {
+                        const startPoint = hand[indices[i]];
+                        const endPoint = hand[indices[i + 1]];
+                        
+                        // Flip coordinates
+                        const flippedStart = { x: 1 - startPoint.x, y: startPoint.y };
+                        const flippedEnd = { x: 1 - endPoint.x, y: endPoint.y };
+                        
+                        drawString(flippedStart, flippedEnd, color, 2);
+                    }
+                    
+                    // Draw landmarks
+                    indices.forEach(index => {
+                        const point = hand[index];
+                        const flippedPoint = { x: 1 - point.x, y: point.y };
+                        drawLandmark(flippedPoint, color);
+                    });
+                });
+            });
+        }
+
+        function drawString(start, end, color, width) {
+            const startX = start.x * canvasElement.width;
+            const startY = start.y * canvasElement.height;
+            const endX = end.x * canvasElement.width;
+            const endY = end.y * canvasElement.height;
+            
+            // Create gradient for smooth effect
+            const gradient = canvasCtx.createLinearGradient(startX, startY, endX, endY);
+            gradient.addColorStop(0, color);
+            gradient.addColorStop(0.5, lightenColor(color, 20));
+            gradient.addColorStop(1, color);
+            
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(startX, startY);
+            canvasCtx.lineTo(endX, endY);
+            canvasCtx.strokeStyle = gradient;
+            canvasCtx.lineWidth = width;
+            canvasCtx.lineCap = 'round';
+            canvasCtx.lineJoin = 'round';
+            
+            // Add glow effect
+            canvasCtx.shadowColor = color;
+            canvasCtx.shadowBlur = 10;
+            canvasCtx.stroke();
+            
+            // Reset shadow
+            canvasCtx.shadowBlur = 0;
+        }
+
+        function drawConnection(start, end, color, width) {
+            const startX = start.x * canvasElement.width;
+            const startY = start.y * canvasElement.height;
+            const endX = end.x * canvasElement.width;
+            const endY = end.y * canvasElement.height;
+            
+            // Calculate midpoint for curved effect
+            const midX = (startX + endX) / 2;
+            const midY = (startY + endY) / 2 - 50; // Curve upward
+            
+            // Create gradient
+            const gradient = canvasCtx.createLinearGradient(startX, startY, endX, endY);
+            gradient.addColorStop(0, color);
+            gradient.addColorStop(0.5, lightenColor(color, 30));
+            gradient.addColorStop(1, color);
+            
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(startX, startY);
+            canvasCtx.quadraticCurveTo(midX, midY, endX, endY);
+            canvasCtx.strokeStyle = gradient;
+            canvasCtx.lineWidth = width;
+            canvasCtx.lineCap = 'round';
+            canvasCtx.lineJoin = 'round';
+            
+            // Add stronger glow for inter-hand connections
+            canvasCtx.shadowColor = color;
+            canvasCtx.shadowBlur = 15;
+            canvasCtx.stroke();
+            
+            // Reset shadow
+            canvasCtx.shadowBlur = 0;
+        }
+
+        function drawLandmark(point, color) {
+            const x = point.x * canvasElement.width;
+            const y = point.y * canvasElement.height;
+            
+            // Outer circle with glow
+            canvasCtx.beginPath();
+            canvasCtx.arc(x, y, 8, 0, 2 * Math.PI);
+            canvasCtx.fillStyle = color;
+            canvasCtx.shadowColor = color;
+            canvasCtx.shadowBlur = 15;
+            canvasCtx.fill();
+            
+            // Inner highlight
+            canvasCtx.beginPath();
+            canvasCtx.arc(x, y, 4, 0, 2 * Math.PI);
+            canvasCtx.fillStyle = 'white';
+            canvasCtx.shadowBlur = 0;
+            canvasCtx.fill();
+        }
+
+        function lightenColor(color, percent) {
+            const num = parseInt(color.replace('#', ''), 16);
+            const amt = Math.round(2.55 * percent);
+            const R = (num >> 16) + amt;
+            const G = (num >> 8 & 0x00FF) + amt;
+            const B = (num & 0x0000FF) + amt;
+            
+            return '#' + (
+                0x1000000 +
+                (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
+                (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
+                (B < 255 ? (B < 1 ? 0 : B) : 255)
+            ).toString(16).slice(1);
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
