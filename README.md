@@ -34,5 +34,5 @@ Built with **HTML5**, **CSS3**, **JavaScript**, and **MediaPipe Hands**.
 ## 📥 How to Install & Run Locally
 
    ```bash
-   git clone https://github.com/YOUR_USERNAME/hand-string-tracker.git
+   git clone https://github.com/semmytaju/hand-string-tracker.git
    cd hand-string-tracker
